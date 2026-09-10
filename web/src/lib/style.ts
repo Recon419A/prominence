@@ -1,6 +1,6 @@
 import type { ExpressionSpecification } from "maplibre-gl";
 
-export const SEA = "#9fb3bc";
+export const SEA = "#1e3f66";
 
 /**
  * Thermal tint of density, people per km² -> colour: cold pale blue for near
@@ -51,7 +51,7 @@ export function floodColor(level: number): ExpressionSpecification {
   ];
 }
 
-export const FLOOD = "rgba(24, 58, 92, 0.55)";
+export const FLOOD = "rgba(30, 63, 102, 0.6)";
 
 /** Contour intervals [minor, major] by zoom, in people per km². */
 export const CONTOUR_THRESHOLDS: Record<number, [number, number]> = {
@@ -71,6 +71,6 @@ export const HILLSHADE = {
   highlight: "#ffffff",
   accent: "#2b3a4c",
 };
-export const SHORE = "#1c4a72";
+export const SHORE = "rgba(225, 235, 245, 0.7)";
 export const ACCENT = "#c8361f";
 export const ACCENT_B = "#1f6f8b";
