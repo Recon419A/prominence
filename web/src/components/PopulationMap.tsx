@@ -70,6 +70,7 @@ interface Props {
 }
 
 const DEM_PATTERN = "dem://{z}/{x}/{y}";
+const LOG_PROTOCOL = "logdem";
 
 // Copied into public/ by scripts/copy-maplibre-worker.mjs.
 setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
@@ -94,24 +95,61 @@ function emptyDemTile(): Promise<Blob> {
   return emptyTile;
 }
 
-/** Decode one of our Terrain-RGB tiles into elevations for maplibre-contour. */
-async function decodeDemTile(
-  blob: Blob,
-): Promise<{ width: number; height: number; data: Float32Array }> {
+/** Pixels of a PNG tile. */
+async function readTilePixels(blob: Blob) {
   const bitmap = await createImageBitmap(blob);
   const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
   const ctx = canvas.getContext("2d")!;
   ctx.drawImage(bitmap, 0, 0);
-  const { data: rgba } = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
-  const data = new Float32Array(bitmap.width * bitmap.height);
+  const { data } = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
+  return { width: bitmap.width, height: bitmap.height, rgba: data };
+}
+
+/** Decode one of our Terrain-RGB tiles into elevations for maplibre-contour. */
+async function decodeDemTile(
+  blob: Blob,
+): Promise<{ width: number; height: number; data: Float32Array }> {
+  const { width, height, rgba } = await readTilePixels(blob);
+  const data = new Float32Array(width * height);
   for (let i = 0; i < data.length; i++) {
     data[i] = decodeDensity(rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2]);
   }
-  return { width: bitmap.width, height: bitmap.height, data };
+  return { width, height, data };
+}
+
+/** Metres of relief per tenfold rise in density. */
+export const METRES_PER_DECADE = 1000;
+
+/**
+ * Re-encode a density tile as log density, in the same Terrain-RGB encoding.
+ *
+ * Density as metres makes every city a cliff tens of kilometres high, which
+ * saturates the hillshade and turns dense cores grey. On a log scale the
+ * terrain has the proportions of a real mountain range: 10 people per km² is
+ * 1 km up, 40,000 is 4.6 km. Tint, contours and every number stay linear.
+ */
+async function logReliefTile(blob: Blob): Promise<ArrayBuffer> {
+  const { width, height, rgba } = await readTilePixels(blob);
+  for (let i = 0; i < width * height; i++) {
+    const d = decodeDensity(rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2]);
+    const metres = d < 1 ? 0 : METRES_PER_DECADE * Math.log10(d);
+    const v = Math.round(metres / DEM_ENCODING.blueFactor);
+    rgba[i * 4] = v >> 16;
+    rgba[i * 4 + 1] = (v >> 8) & 0xff;
+    rgba[i * 4 + 2] = v & 0xff;
+    rgba[i * 4 + 3] = 255;
+  }
+  const canvas = new OffscreenCanvas(width, height);
+  canvas
+    .getContext("2d")!
+    .putImageData(new ImageData(rgba, width, height), 0, 0);
+  const png = await canvas.convertToBlob({ type: "image/png" });
+  return png.arrayBuffer();
 }
 
 function buildStyle(
   demTiles: string,
+  logTiles: string,
   contourTiles: string,
 ): StyleSpecification {
   return {
@@ -127,9 +165,17 @@ function buildStyle(
         maxzoom: DEM_MAX_ZOOM,
         attribution: ATTRIBUTION,
       },
+      // Log density, for the 3-D terrain and the hillshade (see logReliefTile).
       terrain: {
         type: "raster-dem",
-        tiles: [demTiles],
+        tiles: [logTiles],
+        ...DEM_ENCODING,
+        tileSize: 256,
+        maxzoom: DEM_MAX_ZOOM,
+      },
+      shading: {
+        type: "raster-dem",
+        tiles: [logTiles],
         ...DEM_ENCODING,
         tileSize: 256,
         maxzoom: DEM_MAX_ZOOM,
@@ -164,9 +210,9 @@ function buildStyle(
       {
         id: "hillshade",
         type: "hillshade",
-        source: "dem",
+        source: "shading",
         paint: {
-          "hillshade-exaggeration": 0.4,
+          "hillshade-exaggeration": 0.45,
           "hillshade-shadow-color": HILLSHADE.shadow,
           "hillshade-highlight-color": HILLSHADE.highlight,
           "hillshade-accent-color": HILLSHADE.accent,
@@ -472,6 +518,18 @@ function createMap(
       return { data };
     },
   });
+  addProtocol(LOG_PROTOCOL, async (params) => {
+    const [z, x, y] = params.url
+      .slice(LOG_PROTOCOL.length + 3)
+      .split("/")
+      .map(Number);
+    const tile = await archive.getZxy(z, x, y);
+    const blob = tile
+      ? new Blob([tile.data], { type: "image/png" })
+      : await emptyDemTile();
+    return { data: await logReliefTile(blob) };
+  });
+
   // Not demSource.setupMaplibre: the local manager caches contour tiles and
   // returns the same ArrayBuffer for a repeated request, but MapLibre transfers
   // the buffer to its worker, which detaches it. Hand MapLibre a copy each time.
@@ -484,6 +542,7 @@ function createMap(
     container: host,
     style: buildStyle(
       `pmtiles://${TILES_URL}/{z}/{x}/{y}`,
+      `${LOG_PROTOCOL}://{z}/{x}/{y}`,
       demSource.contourProtocolUrl({
         thresholds: CONTOUR_THRESHOLDS,
         contourLayer: "contours",
@@ -573,6 +632,7 @@ export default function PopulationMap({
       setLive(null);
       map?.remove();
       removeProtocol("pmtiles");
+      removeProtocol(LOG_PROTOCOL);
     };
     // The map is created once; later prop changes are applied by the effects below.
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -8,9 +8,11 @@ The pipeline encodes population density as Terrain-RGB tiles, so MapLibre
 treats it as elevation:
 
 - `color-relief` tints density on a hypsometric ramp,
-- `hillshade` lights it,
+- `hillshade` lights it and `terrain` lets you tilt it into 3-D; both read a
+  log-density copy of each tile, re-encoded in the browser (10 /km² is 1 km
+  up, 40,000 /km² is 4.6 km), because density-as-metres makes every city a
+  cliff that saturates the shading,
 - `maplibre-contour` draws density contours client-side from the same tiles,
-- `terrain` lets you tilt the map into 3-D with adjustable exaggeration,
 - a second `color-relief` layer floods everything below the chosen sea level.
 
 Peaks come from `peaks_<epoch>.json` (see `src/lib/peaks.ts`), which carries

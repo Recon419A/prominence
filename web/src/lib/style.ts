@@ -69,7 +69,7 @@ export const CONTOUR_MAJOR = "rgba(40, 40, 48, 0.8)";
 export const HILLSHADE = {
   shadow: "#243040",
   highlight: "#ffffff",
-  accent: "#4a4a4a",
+  accent: "#2b3a4c",
 };
 export const SHORE = "#1c4a72";
 export const ACCENT = "#c8361f";

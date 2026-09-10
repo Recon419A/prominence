@@ -23,7 +23,7 @@ const EMPTY: Peak[] = [];
 const DEFAULT_CONTROLS: Controls = {
   seaLevel: 1,
   minProminence: 1000,
-  exaggeration: 0.02,
+  exaggeration: 1.5,
 };
 
 type LoadState =

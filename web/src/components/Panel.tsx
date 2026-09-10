@@ -88,11 +88,11 @@ export default function Panel(props: Props) {
         />
         <Slider
           label="Relief"
-          hint="Vertical exaggeration of the 3-D terrain (tilt the map)"
+          hint="Vertical exaggeration of the 3-D terrain (tilt the map). Relief is drawn on log density: each tenfold rise is a kilometre."
           value={controls.exaggeration}
-          range={[0, 0.08]}
+          range={[0, 3]}
           linear
-          format={(v) => (v === 0 ? "flat" : `×${v.toFixed(3)}`)}
+          format={(v) => (v === 0 ? "flat" : `×${v.toFixed(2)}`)}
           onChange={(exaggeration) => onControls({ ...controls, exaggeration })}
         />
         <Legend />
