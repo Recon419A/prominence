@@ -10,6 +10,7 @@ import {
   people,
   tidy,
 } from "@/lib/format";
+import { RELIEF_STOPS } from "@/lib/style";
 import { type DivideTree, type Peak, peakLabel } from "@/lib/peaks";
 import type { Controls } from "./Explorer";
 import type { Selection } from "./PopulationMap";
@@ -94,6 +95,7 @@ export default function Panel(props: Props) {
           format={(v) => (v === 0 ? "flat" : `×${v.toFixed(3)}`)}
           onChange={(exaggeration) => onControls({ ...controls, exaggeration })}
         />
+        <Legend />
         {tree && (
           <p className="readout">
             <span className="figure">{ranked.length.toLocaleString()}</span>{" "}
@@ -176,6 +178,40 @@ export default function Panel(props: Props) {
         <a href="https://github.com/Recon419A/prominence">GitHub</a>.
       </footer>
     </aside>
+  );
+}
+
+const LEGEND_RANGE: [number, number] = [1, 50_000];
+const LEGEND_TICKS = [1, 10, 100, 1000, 10_000, 50_000];
+
+/** The relief ramp on a log axis, so the tint can be read off the map. */
+function Legend() {
+  const gradient = RELIEF_STOPS.filter(([v]) => v >= 1)
+    .map(
+      ([v, c]) => `${c} ${(logPosition(v, ...LEGEND_RANGE) * 100).toFixed(1)}%`,
+    )
+    .join(", ");
+  return (
+    <div
+      className="legend"
+      aria-label="Colour scale, people per square kilometre"
+    >
+      <div
+        className="legend-bar"
+        style={{ background: `linear-gradient(90deg, ${gradient})` }}
+      />
+      <div className="legend-ticks">
+        {LEGEND_TICKS.map((v) => (
+          <span
+            key={v}
+            style={{ left: `${logPosition(v, ...LEGEND_RANGE) * 100}%` }}
+          >
+            {v >= 1000 ? `${v / 1000}k` : v}
+          </span>
+        ))}
+      </div>
+      <span className="slider-hint">people per km², height of the terrain</span>
+    </div>
   );
 }
 

@@ -230,6 +230,33 @@ body {
   outline-offset: 4px;
 }
 
+/* Legend. */
+.legend {
+  margin: 4px 0 6px;
+}
+.legend-bar {
+  height: 10px;
+  border: 1px solid var(--ink);
+}
+.legend-ticks {
+  position: relative;
+  height: 14px;
+  margin-top: 2px;
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  color: var(--ink-soft);
+}
+.legend-ticks span {
+  position: absolute;
+  transform: translateX(-50%);
+}
+.legend-ticks span:first-child {
+  transform: none;
+}
+.legend-ticks span:last-child {
+  transform: translateX(-100%);
+}
+
 /* Peak card. */
 .card {
   background: var(--paper-deep);
