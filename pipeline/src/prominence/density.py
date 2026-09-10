@@ -10,6 +10,7 @@ from numpy.typing import NDArray
 from rasterio.enums import Resampling
 from rasterio.transform import Affine
 from rasterio.windows import Window
+from scipy.ndimage import uniform_filter
 
 #: Radius of the sphere with the same surface area as the WGS84 ellipsoid, km.
 AUTHALIC_RADIUS_KM = 6371.0072
@@ -35,44 +36,55 @@ def count_to_density(
     count_path: Path,
     density_path: Path,
     *,
-    block_rows: int = 512,
+    smooth: int = 3,
     overviews: bool = True,
 ) -> Path:
     """Write people-per-km² from a people-per-cell GeoTIFF.
 
-    Nodata in the source (ocean) stays nodata. Overviews are averaged, which is
-    the right aggregation for an intensive quantity like density.
+    ``smooth`` is the side of a box filter applied to the density (1 disables
+    it). GHS-POP concentrates some census units into one or two cells, which
+    would otherwise dominate any ranking by height; a 3x3 mean defines height
+    as density over roughly a 3 km neighbourhood instead.
+
+    Nodata in the source is treated as empty land. Overviews are averaged,
+    which is the right aggregation for an intensive quantity like density.
     """
+    if smooth < 1 or smooth % 2 == 0:
+        raise ValueError("smooth must be a positive odd integer")
     with rasterio.open(count_path) as src:
         if src.count != 1:
             raise ValueError("expected a single-band count raster")
         areas = cell_areas_km2(src.transform, src.height)
+        counts = src.read(1, out_dtype="float32")
+        if src.nodata is not None:
+            counts[counts == src.nodata] = 0
         profile = src.profile.copy()
-        profile.update(
-            driver="GTiff",
-            dtype="float32",
-            nodata=float(DENSITY_NODATA),
-            tiled=True,
-            blockxsize=512,
-            blockysize=512,
-            compress="deflate",
-            predictor=3,
-            zlevel=6,
-            bigtiff="yes",
-        )
-        density_path.parent.mkdir(parents=True, exist_ok=True)
-        with rasterio.open(density_path, "w", **profile) as dst:
-            for row0 in range(0, src.height, block_rows):
-                window = Window(0, row0, src.width, min(block_rows, src.height - row0))
-                counts = src.read(1, window=window, masked=True)
-                area = areas[row0 : row0 + window.height, None]
-                density = np.asarray(counts / area, dtype=np.float32)
-                density = np.where(counts.mask, DENSITY_NODATA, density)
-                dst.write(density, 1, window=window)
-            if overviews:
-                factors = [2**k for k in range(1, 8) if src.width >> k >= 256]
-                dst.build_overviews(factors, Resampling.average)
-                dst.update_tags(ns="rio_overview", resampling="average")
+    density = counts / areas[:, None].astype(np.float32)
+    del counts
+    if smooth > 1:
+        density = uniform_filter(density, size=smooth, mode="nearest")
+
+    profile.update(
+        driver="GTiff",
+        dtype="float32",
+        nodata=float(DENSITY_NODATA),
+        tiled=True,
+        blockxsize=512,
+        blockysize=512,
+        compress="deflate",
+        predictor=3,
+        zlevel=6,
+        bigtiff="yes",
+    )
+    density_path.parent.mkdir(parents=True, exist_ok=True)
+    with rasterio.open(density_path, "w", **profile) as dst:
+        for row0 in range(0, density.shape[0], 1024):
+            window = Window(0, row0, density.shape[1], min(1024, density.shape[0] - row0))
+            dst.write(density[row0 : row0 + window.height], 1, window=window)
+        if overviews:
+            factors = [2**k for k in range(1, 8) if density.shape[1] >> k >= 256]
+            dst.build_overviews(factors, Resampling.average)
+            dst.update_tags(ns="rio_overview", resampling="average")
     return density_path
 
 

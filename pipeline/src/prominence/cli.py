@@ -26,6 +26,7 @@ def _paths(data_dir: Path, epoch: int) -> dict[str, Path]:
         "raw": data_dir / "raw",
         "count": data_dir / "raw" / f"{source.stem}.tif",
         "density": data_dir / "derived" / f"density_{epoch}_30ss.tif",
+        "tree": data_dir / "derived" / f"tree_{epoch}.npz",
         "peaks": data_dir / "derived" / f"peaks_{epoch}.json",
         "tiles": data_dir / "derived" / f"density_{epoch}.pmtiles",
     }
@@ -46,24 +47,44 @@ def density_cmd(data_dir: DataDir = Path("data"), epoch: Epoch = 2025) -> None:
     typer.echo(density.count_to_density(p["count"], p["density"]))
 
 
+MinProminence = Annotated[float, typer.Option(help="Keep peaks at least this prominent.")]
+
+
 @app.command("peaks")
 def peaks_cmd(
     data_dir: DataDir = Path("data"),
     epoch: Epoch = 2025,
     floor: Annotated[float, typer.Option(help="Sea level, people per km².")] = 1.0,
-    min_prominence: Annotated[
-        float, typer.Option(help="Keep peaks at least this prominent.")
-    ] = 100.0,
+    min_prominence: MinProminence = 100.0,
+    export_prominence: Annotated[
+        float, typer.Option(help="Prominence threshold for the JSON export.")
+    ] = 3000.0,
 ) -> None:
-    """Compute the divide tree and export named peaks as JSON."""
+    """Compute and name the divide tree, save it, and export peaks as JSON."""
     p = _paths(data_dir, epoch)
     tree, transform = peaks.compute_tree(
         p["density"], p["count"], floor=floor, min_prominence=min_prominence
     )
     cities = peaks.load_geonames_cities(p["raw"] / "cities15000.txt")
     names = peaks.name_peaks(tree, transform, cities)
-    peaks.export_peaks(tree, transform, names, p["peaks"], floor=floor)
-    typer.echo(f"{len(tree)} peaks with prominence >= {min_prominence} -> {p['peaks']}")
+    peaks.save_tree(tree, names, transform, floor, p["tree"])
+    typer.echo(f"{len(tree)} peaks with prominence >= {min_prominence} -> {p['tree']}")
+    export(data_dir, epoch, export_prominence)
+
+
+@app.command()
+def export(
+    data_dir: DataDir = Path("data"),
+    epoch: Epoch = 2025,
+    min_prominence: MinProminence = 3000.0,
+) -> None:
+    """Export peaks from a saved tree as JSON, at a chosen prominence threshold."""
+    p = _paths(data_dir, epoch)
+    tree, names, transform, floor = peaks.load_tree(p["tree"])
+    n = peaks.export_peaks(
+        tree, names, transform, p["peaks"], floor=floor, min_prominence=min_prominence
+    )
+    typer.echo(f"{n} peaks with prominence >= {min_prominence} -> {p['peaks']}")
 
 
 @app.command("tiles")
