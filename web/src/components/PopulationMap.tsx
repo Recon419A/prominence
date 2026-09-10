@@ -37,8 +37,8 @@ import {
   FLOOD_MIN_LEVEL,
   HILLSHADE,
   INK,
+  LAND,
   SEA,
-  SHORE,
   floodColor,
   reliefColor,
 } from "@/lib/style";
@@ -185,11 +185,9 @@ function buildStyle(
         tiles: [contourTiles],
         maxzoom: DEM_MAX_ZOOM + 4,
       },
-      coast: { type: "geojson", data: "/basemap/ne_50m_coastline.geojson" },
-      borders: {
-        type: "geojson",
-        data: "/basemap/ne_50m_admin_0_boundary_lines_land.geojson",
-      },
+      // GHS-POP cannot tell empty land from water: both are zero. Natural Earth can.
+      land: { type: "geojson", data: "/basemap/ne_50m_land.geojson" },
+      lakes: { type: "geojson", data: "/basemap/ne_50m_lakes.geojson" },
       peaks: {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
@@ -201,6 +199,12 @@ function buildStyle(
     },
     layers: [
       { id: "sea", type: "background", paint: { "background-color": SEA } },
+      {
+        id: "land",
+        type: "fill",
+        source: "land",
+        paint: { "fill-color": LAND },
+      },
       {
         id: "relief",
         type: "color-relief",
@@ -227,21 +231,10 @@ function buildStyle(
         paint: { "color-relief-color": floodColor(1) },
       },
       {
-        id: "coast",
-        type: "line",
-        source: "coast",
-        paint: { "line-color": SHORE, "line-width": 0.6, "line-opacity": 0.7 },
-      },
-      {
-        id: "borders",
-        type: "line",
-        source: "borders",
-        paint: {
-          "line-color": INK,
-          "line-width": 0.5,
-          "line-opacity": 0.35,
-          "line-dasharray": [4, 2],
-        },
+        id: "lakes",
+        type: "fill",
+        source: "lakes",
+        paint: { "fill-color": SEA },
       },
       {
         id: "contour-minor",

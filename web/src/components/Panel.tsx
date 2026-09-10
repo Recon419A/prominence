@@ -174,7 +174,7 @@ export default function Panel(props: Props) {
 
       <footer className="sheet-foot">
         Population: GHS-POP R2023A, European Commission JRC (CC BY 4.0). Names:
-        GeoNames (CC BY 4.0). Coastlines: Natural Earth. Source on{" "}
+        GeoNames (CC BY 4.0). Land and lakes: Natural Earth. Source on{" "}
         <a href="https://github.com/Recon419A/prominence">GitHub</a>.
       </footer>
     </aside>

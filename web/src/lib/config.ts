@@ -31,4 +31,4 @@ export const GLYPHS_URL =
 export const ATTRIBUTION =
   'Population <a href="https://human-settlement.emergency.copernicus.eu/">GHS-POP R2023A</a> © European Commission JRC, CC BY 4.0 · ' +
   'Names <a href="https://www.geonames.org/">GeoNames</a>, CC BY 4.0 · ' +
-  'Coastlines <a href="https://www.naturalearthdata.com/">Natural Earth</a>';
+  'Land and lakes <a href="https://www.naturalearthdata.com/">Natural Earth</a>';

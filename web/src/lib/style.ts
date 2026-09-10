@@ -1,6 +1,8 @@
 import type { ExpressionSpecification } from "maplibre-gl";
 
 export const SEA = "#1e3f66";
+/** Land with nobody on it; also the first step of the ramp so the two meet seamlessly. */
+export const LAND = "#e9edf0";
 
 /**
  * Thermal tint of density, people per km² -> colour: cold pale blue for near
@@ -8,10 +10,11 @@ export const SEA = "#1e3f66";
  * densest cores. Stops are spaced roughly logarithmically.
  */
 export const RELIEF_STOPS: [number, string][] = [
-  // color-relief paints opaquely, so the sea is painted rather than left clear.
-  [0, SEA],
-  [0.5, SEA],
-  [1, "#e9edf0"],
+  // Below half a person per km² nothing is painted: the land and water
+  // polygons underneath decide what shows.
+  [0, "rgba(0,0,0,0)"],
+  [0.5, "rgba(0,0,0,0)"],
+  [1, LAND],
   [25, "#c4d9e8"],
   [100, "#8ec6c5"],
   [400, "#7dc36f"],
@@ -71,6 +74,5 @@ export const HILLSHADE = {
   highlight: "#ffffff",
   accent: "#2b3a4c",
 };
-export const SHORE = "rgba(225, 235, 245, 0.7)";
 export const ACCENT = "#c8361f";
 export const ACCENT_B = "#1f6f8b";

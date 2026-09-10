@@ -87,6 +87,8 @@ tree at another threshold in seconds.
   30 arc-seconds (~1 km) and 3 arc-seconds (~100 m), stitched into one
   multi-resolution pyramid.
 - Place names: [GeoNames](https://www.geonames.org/), CC BY 4.0.
+- Land and lake outlines: [Natural Earth](https://www.naturalearthdata.com/), public
+  domain. GHS-POP alone cannot tell empty land from water; both are zero.
 
 ## Licence
 
