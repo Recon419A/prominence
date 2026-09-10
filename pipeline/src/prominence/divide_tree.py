@@ -150,8 +150,21 @@ def build_divide_tree(
     del active
 
     n_peaks = _count_peaks(h, order, np.float32(floor))
-    *peaks, cell_comp = _sweep(h, w, ra, order, n_peaks, np.float32(floor))
-    return DivideTree(*peaks, cell_peak=cell_comp.reshape(h.shape))
+    (peak_row, peak_col, peak_height, col_row, col_col, col_height, parent, mass, area, cells) = (
+        _sweep(h, w, ra, order, n_peaks, np.float32(floor))
+    )
+    return DivideTree(
+        peak_row=peak_row,
+        peak_col=peak_col,
+        peak_height=peak_height,
+        col_row=col_row,
+        col_col=col_col,
+        col_height=col_height,
+        parent=parent,
+        mass=mass,
+        area=area,
+        cell_peak=cells.reshape(h.shape),
+    )
 
 
 @numba.njit(cache=True)

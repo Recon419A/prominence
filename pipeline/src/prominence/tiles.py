@@ -2,8 +2,11 @@
 
 MapLibre can drape, shade and contour any ``raster-dem`` source, so encoding
 population density as elevation gets the whole terrain toolchain for free.
-Tiles use the Mapbox Terrain-RGB encoding, ``elevation = -10000 + 0.1 * (R*65536
-+ G*256 + B)``, whose range comfortably covers the densest cells on Earth.
+Tiles use a Terrain-RGB encoding without the Mapbox -10000 m offset:
+``elevation = 0.1 * (R*65536 + G*256 + B)``. Density is never negative, and
+dropping the offset keeps sea level exactly representable in the reduced
+precision of GPU fragment shaders, where ``-10000 + 100000 * 0.1`` is not.
+The range still comfortably covers the densest cells on Earth.
 """
 
 from __future__ import annotations
@@ -20,12 +23,21 @@ from pmtiles.tile import Compression, TileType, zxy_to_tileid
 from pmtiles.writer import Writer
 
 TILE_SIZE = 256
-BASE_SHIFT = 10000.0
+BASE_SHIFT = 0.0
 INTERVAL = 0.1
+
+#: MapLibre ``raster-dem`` source options describing this encoding.
+ENCODING = {
+    "encoding": "custom",
+    "redFactor": 65536 * INTERVAL,
+    "greenFactor": 256 * INTERVAL,
+    "blueFactor": INTERVAL,
+    "baseShift": -BASE_SHIFT,
+}
 
 
 def encode_terrain_rgb(elevation: NDArray[np.floating]) -> NDArray[np.uint8]:
-    """Mapbox Terrain-RGB encoding of an elevation grid, clipped to its range."""
+    """Terrain-RGB encoding of an elevation grid, clipped to its range."""
     value = np.rint((np.nan_to_num(elevation, nan=0.0) + BASE_SHIFT) / INTERVAL)
     value = np.clip(value, 0, 256**3 - 1).astype(np.uint32)
     rgb = np.empty((*elevation.shape, 3), np.uint8)
@@ -91,7 +103,9 @@ def render_pmtiles(
     """Write Terrain-RGB tiles for zooms 0..``max_zoom``; returns the tile count.
 
     The quadtree is pruned as it descends: a tile with no population has no
-    populated children, so those are never rendered.
+    populated children, so those are never rendered. Every unrendered tile is
+    then written as one shared all-sea tile, which PMTiles stores once, so the
+    map never has to treat a missing tile differently from open ocean.
     """
     path = str(density_path)
     tiles: list[RenderedTile] = []
@@ -108,12 +122,16 @@ def render_pmtiles(
                 for dy in (0, 1)
             ]
 
-    tiles.sort(key=lambda t: zxy_to_tileid(t.z, t.x, t.y))
+    rendered = {zxy_to_tileid(t.z, t.x, t.y): t.png for t in tiles}
+    sea = _png_bytes(encode_terrain_rgb(np.zeros((TILE_SIZE, TILE_SIZE))))
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("wb") as fh:
         writer = Writer(fh)
-        for t in tiles:
-            writer.write_tile(zxy_to_tileid(t.z, t.x, t.y), t.png)
+        for z in range(max_zoom + 1):
+            for x in range(2**z):
+                for y in range(2**z):
+                    tile_id = zxy_to_tileid(z, x, y)
+                    writer.write_tile(tile_id, rendered.get(tile_id, sea))
         writer.finalize(
             {
                 "tile_type": TileType.PNG,
@@ -130,7 +148,7 @@ def render_pmtiles(
             },
             {
                 "name": "Population density as Terrain-RGB",
-                "encoding": "mapbox",
+                **ENCODING,
                 "units": "people per km² encoded as metres",
                 "attribution": attribution,
             },
