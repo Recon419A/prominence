@@ -35,6 +35,7 @@ import {
   CONTOUR_MAJOR,
   CONTOUR_THRESHOLDS,
   FLOOD_MIN_LEVEL,
+  HILLSHADE,
   INK,
   SEA,
   SHORE,
@@ -165,10 +166,10 @@ function buildStyle(
         type: "hillshade",
         source: "dem",
         paint: {
-          "hillshade-exaggeration": 0.55,
-          "hillshade-shadow-color": "#3a2415",
-          "hillshade-highlight-color": "#fff8e6",
-          "hillshade-accent-color": "#6b3d1f",
+          "hillshade-exaggeration": 0.4,
+          "hillshade-shadow-color": HILLSHADE.shadow,
+          "hillshade-highlight-color": HILLSHADE.highlight,
+          "hillshade-accent-color": HILLSHADE.accent,
           "hillshade-illumination-direction": 315,
         },
       },
@@ -471,7 +472,13 @@ function createMap(
       return { data };
     },
   });
-  demSource.setupMaplibre({ addProtocol });
+  // Not demSource.setupMaplibre: the local manager caches contour tiles and
+  // returns the same ArrayBuffer for a repeated request, but MapLibre transfers
+  // the buffer to its worker, which detaches it. Hand MapLibre a copy each time.
+  addProtocol(demSource.contourProtocolId, async (params, abort) => {
+    const response = await demSource.contourProtocolV4(params, abort);
+    return { ...response, data: response.data.slice(0) };
+  });
 
   const map = new MapLibreMap({
     container: host,
