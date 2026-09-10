@@ -37,7 +37,48 @@ ask the divide tree how any two places relate.
 pipeline/   Python: fetch GHS-POP, build the density pyramid, compute the
             divide tree, export peaks and terrain tiles.
 web/        Next.js + MapLibre: the interactive map.
+data/       Raw downloads and derived outputs (not committed).
 ```
+
+## Build it
+
+The pipeline needs [uv](https://docs.astral.sh/uv/); the web app needs Node 24.
+
+```bash
+uv run --project pipeline prominence build   # ~1 GB download, ~10 minutes
+cd web && npm install && ln -s ../../data/derived public/data && npm run dev
+```
+
+`prominence build` runs four steps that can also be run separately:
+
+| step      | does                                                                 | writes                     |
+| --------- | -------------------------------------------------------------------- | -------------------------- |
+| `fetch`   | downloads GHS-POP and GeoNames                                       | `data/raw/`                |
+| `density` | people per cell → people per km² over a 3×3 (~3 km) box, with overviews | `density_<epoch>_30ss.tif` |
+| `peaks`   | divide tree, names, `.npz` of every peak with prominence ≥ 100       | `tree_<epoch>.npz`, `peaks_<epoch>.json` |
+| `tiles`   | Terrain-RGB tiles, zoom 0–8, quadtree-pruned                          | `density_<epoch>.pmtiles`  |
+
+`prominence export --min-prominence N` re-exports the web JSON from the saved
+tree at another threshold in seconds.
+
+## Method notes
+
+- **Height** is GHS-POP population count divided by cell area on the authalic
+  sphere, then averaged over a 3×3 window. GHS-POP concentrates some census
+  units into one or two 1 km cells (Luxor and Surat carry cells over
+  300,000 /km²); the smoothing keeps such spikes from outranking every real
+  megacity, at the cost of lowering every peak somewhat. Some artefacts
+  remain visible in the rankings.
+- **Sea level** for the tree is 1 person per km². Prominence of an island
+  summit is measured from there.
+- **Names** come from GeoNames cities of 15,000+ people. Each city belongs to
+  the peak whose territory (key col contour minus children's contours) it
+  stands in; peaks then claim names in descending order of prominence, taking
+  the most populous unclaimed city anywhere on their mountain. A peak with no
+  city borrows the nearest one within 30 km, shown as "near …".
+- **Tiles** encode density as `0.1 × (R·65536 + G·256 + B)` without the usual
+  −10,000 m Terrain-RGB offset, so that sea level stays exact in the reduced
+  precision of fragment shaders.
 
 ## Data
 
@@ -46,6 +87,8 @@ web/        Next.js + MapLibre: the interactive map.
   30 arc-seconds (~1 km) and 3 arc-seconds (~100 m), stitched into one
   multi-resolution pyramid.
 - Place names: [GeoNames](https://www.geonames.org/), CC BY 4.0.
+- Land and lake outlines: [Natural Earth](https://www.naturalearthdata.com/), public
+  domain. GHS-POP alone cannot tell empty land from water; both are zero.
 
 ## Licence
 

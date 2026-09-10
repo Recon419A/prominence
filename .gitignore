@@ -31,4 +31,7 @@ next-env.d.ts
 
 # Data: large raw and derived rasters live outside git
 data/
-web/public/data/
+web/public/data
+
+# Playwright MCP output
+.playwright-mcp/
