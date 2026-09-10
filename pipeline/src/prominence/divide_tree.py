@@ -61,6 +61,10 @@ class DivideTree:
     """Sum of ``weight`` over the cells enclosed by the peak's key-col contour."""
     area: NDArray[np.float64]
     """Sum of ``row_area`` over the same cells."""
+    cell_peak: NDArray[np.int32] | None = None
+    """Per cell, the peak whose *territory* it lies in: the peak whose key-col
+    contour encloses the cell while no child's contour does. Sea is ``NO_PEAK``.
+    Same shape as the input grid."""
 
     @property
     def prominence(self) -> NDArray[np.float32]:
@@ -80,6 +84,12 @@ class DivideTree:
         new_id[keep] = np.arange(int(keep.sum()), dtype=np.int32)
         parent = self.parent[keep]
         parent = np.where(parent == NO_PEAK, NO_PEAK, new_id[parent]).astype(np.int32)
+        cell_peak = None
+        if self.cell_peak is not None:
+            # A dropped peak's territory folds into its nearest kept ancestor.
+            owner = _nearest_kept_ancestor(keep, self.parent)
+            lookup = np.append(new_id[owner], NO_PEAK)  # index -1 -> NO_PEAK
+            cell_peak = lookup[self.cell_peak]
         return DivideTree(
             peak_row=self.peak_row[keep],
             peak_col=self.peak_col[keep],
@@ -90,7 +100,23 @@ class DivideTree:
             parent=parent,
             mass=self.mass[keep],
             area=self.area[keep],
+            cell_peak=cell_peak,
         )
+
+
+@numba.njit(cache=True)
+def _nearest_kept_ancestor(keep, parent):
+    """For each peak, itself if kept, else its closest kept ancestor (or NO_PEAK).
+
+    Parents have smaller ids than children, so one ascending pass suffices.
+    """
+    out = np.full(keep.shape[0], NO_PEAK, np.int32)
+    for p in range(keep.shape[0]):
+        if keep[p]:
+            out[p] = p
+        elif parent[p] != NO_PEAK:
+            out[p] = out[parent[p]]
+    return out
 
 
 def build_divide_tree(
@@ -124,8 +150,8 @@ def build_divide_tree(
     del active
 
     n_peaks = _count_peaks(h, order, np.float32(floor))
-    out = _sweep(h, w, ra, order, n_peaks, np.float32(floor))
-    return DivideTree(*out)
+    *peaks, cell_comp = _sweep(h, w, ra, order, n_peaks, np.float32(floor))
+    return DivideTree(*peaks, cell_peak=cell_comp.reshape(h.shape))
 
 
 @numba.njit(cache=True)
@@ -277,6 +303,7 @@ def _sweep(h, w, row_area, order, n_peaks, floor):
         parent,
         mass,
         area,
+        cell_comp,
     )
 
 

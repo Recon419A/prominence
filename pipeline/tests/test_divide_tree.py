@@ -128,3 +128,18 @@ def test_merge_level_across_islands_is_floor():
     h = np.array([[9, 1, 7]], dtype=np.float32)
     tree = build_divide_tree(h, floor=3)
     assert merge_level(tree, 0, 1) == 3
+
+
+def test_territories_partition_land_and_fold_on_prune():
+    # 9 . 8 . 4 . 7 . 6: the 7-peak's territory is cells 3-4, the 8-peak has 1.
+    h = np.array([[9, 8, 4, 7, 6]], dtype=np.float32)
+    tree = build_divide_tree(h, floor=0)
+    ids = {float(v): i for i, v in enumerate(tree.peak_height)}
+    assert tree.cell_peak.tolist() == [[ids[9], ids[9], ids[9], ids[7], ids[7]]]
+    # Prune the 7-peak (prominence 3) away: its land folds into the 9-peak.
+    pruned = tree.prune(4)
+    assert len(pruned) == 1
+    assert pruned.cell_peak.tolist() == [[0, 0, 0, 0, 0]]
+    # Sea stays sea.
+    sea = build_divide_tree(np.array([[0, 5]], dtype=np.float32)).prune(0)
+    assert sea.cell_peak.tolist() == [[NO_PEAK, 0]]
